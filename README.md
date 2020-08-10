@@ -1,1 +1,1 @@
-# Adaptable_IK_Motion_Prediction
+# Adaptable_Arm_Motion_Prediction
