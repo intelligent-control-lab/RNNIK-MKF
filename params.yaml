@@ -1,0 +1,25 @@
+prediction_step: 10
+
+arm_predictor:
+  adapt: True
+  lambda: 1
+  
+wrist_predictor:
+  # Adaptation params
+  adapt: True
+  lambda: 1
+
+  # Network hyper params
+  model_path: 'trained_model/model_norm_1layer_left/model56.tar'
+  input_seq_len: 30
+  input_size: 3
+  hidden_size: 128
+  num_layers: 1
+  output_size: 3
+
+Train_wrist_predictor:
+  train: True
+  output_folder: 'trained_model/'
+  save_model: True
+  learning_rate: 0.001
+  num_epochs: 100

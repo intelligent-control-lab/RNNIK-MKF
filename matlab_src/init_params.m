@@ -61,6 +61,11 @@ function init_params()
     jacobew(6, 4) = diff(wz, th4);
     jacobew(6, 5) = diff(wz, th5);
     
+    FK = FK(1:3, 4);
+    elbowFK = elbowFK(1:3, 4);
+    FKew = [FKew(1, 4); FKew(2, 4); FKew(3, 4); 
+            FKew(5, 4); FKew(6, 4); FKew(7, 4)];
+    
     matlabFunction(FK, 'file', 'FK.m', 'optimize', false, 'vars', [th1, th2, th3, th4, th5, l1, l2, pi1]);
     matlabFunction(elbowFK, 'file', 'FK_elbow.m', 'optimize', false, 'vars', [th1, th2, th3, th4, th5, l1, l2, pi1]);
     matlabFunction(jacob, 'file', 'jacobian.m', 'optimize', false, 'vars', [th1, th2, th3, th4, th5, l1, l2, pi1]);
