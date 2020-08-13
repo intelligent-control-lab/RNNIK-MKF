@@ -2,24 +2,32 @@ prediction_step: 10
 
 arm_predictor:
   adapt: True
-  lambda: 1
+  lambda: 1 # Forgetting factor
   
 wrist_predictor:
   # Adaptation params
   adapt: True
-  lambda: 1
+  lambda: 1 # Forgetting factor
+  EMA_v: 0
+  EMA_p: 0
+  enable_multi_epoch: 0
+  multi_epoch_epsilon1: 0.15
+  multi_epoch_epsilon2: 0.8
 
   # Network hyper params
-  model_path: 'trained_model/model_norm_1layer_left/model56.tar'
-  input_seq_len: 30
-  input_size: 3
+  model_path: 'trained_model/model_10in_1layer_good/model49.tar' 
+  input_seq_len: 10
+  input_size: 3 # input: 10x3
   hidden_size: 128
   num_layers: 1
-  output_size: 3
+  output_size: 3 # output (1xn): 1x3
+
 
 Train_wrist_predictor:
-  train: True
+  # True: train from scratch using the hyper params in wrist_predictor and then evaluate. False: evaluate the model specified by model_path
+  train: False
+  save_model: True # True: save trained model in the output_folder
   output_folder: 'trained_model/'
-  save_model: True
-  learning_rate: 0.001
-  num_epochs: 100
+  model_path: 'trained_model/model_norm_1layer_left/model56.tar' 
+  learning_rate: 0.00001
+  num_epochs: 50

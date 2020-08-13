@@ -10,7 +10,7 @@ class ArmPredictor():
         self.matlab_eng.init_params(nargout=0)
         self.l1_len = 0 # Upper arm
         self.l2_len = 0 # Lower arm
-        self.K = np.identity(5)
+        self.K = np.identity(5) # 5 DOF arm
 
         with open(param_path) as f:
             data = yaml.load(f, Loader=yaml.FullLoader)
@@ -18,44 +18,49 @@ class ArmPredictor():
         self.enable_adapt = data['arm_predictor']['adapt']
         self.pred_step = data['prediction_step']
         self.RLS = RLS(self.K, 100000*np.identity(5), lamda)
-
-        self.error_list = []
+        
         self.K_list = []
         self.pre_cur_pos = 0
         self.pre_cur_th = 0
         self.pre_J = 0
     
     def predict_arm(self, wrist_prediction, cur_th, shoulder_trans, adapt):
-        cur_th = np.reshape(cur_th, (5, 1))
+        cur_th = np.reshape(cur_th, (5, 1)) # 5 DOF arm
         prediction = []
+
+        # Iteratively take in wrist prediction and output corresponding elbow prediction
         for i in range(self.pred_step):
-            next_pos_world = wrist_prediction[i, 0:3]
+            # Transform position from camera frame to shoulder frame
+            next_pos_world = wrist_prediction[i, :3]
             next_pos = self.trans_to_frame(next_pos_world, shoulder_trans)
+
+            # Calculate Jacobian and position at current step
             J = self.matlab_eng.jacobian(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
                                          self.l1_len, self.l2_len, float(np.pi), nargout=1)
             fk = self.matlab_eng.FK(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
                                     self.l1_len, self.l2_len, float(np.pi), nargout=1)
             cur_pos = np.asarray(fk).reshape((3, 1))
             
-            # RLS
-            if(i==0):
-                if(adapt and self.enable_adapt):
-                    eck = cur_pos-self.pre_cur_pos
-                    xk = np.matmul(np.transpose(self.pre_J), eck)
+            # Adaptation
+            if(i==0 and self.enable_adapt):
+                if(adapt):
+                    dw = cur_pos-self.pre_cur_pos
+                    xk = np.matmul(np.transpose(self.pre_J), dw)
                     pred_cur_th = self.pre_cur_th+np.matmul(np.transpose(self.K), xk)
-                    ek = cur_th-pred_cur_th
+                    err = cur_th-pred_cur_th
 
-                    self.K = self.RLS.adapt(xk, ek)
-                    self.K_list.append(np.reshape(self.K, (1, 25)))
+                    self.K = self.RLS.adapt(xk, err)
+                    self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
                 else:
                     self.pre_cur_pos = cur_pos
                     self.pre_cur_th = cur_th
                     self.pre_J = J
             
-            dw = next_pos[0:3, :]-cur_pos[0:3, :]
+            dw = next_pos[:3, :]-cur_pos[:3, :]
             next_th = cur_th + np.matmul(np.matmul(np.transpose(self.K), np.transpose(J)), dw)
             cur_th = next_th
             
+            # Transform prediction in joint space to Cartesian
             fk_elbow = self.matlab_eng.FK_elbow(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
                                                 self.l1_len, self.l2_len, float(np.pi), nargout=1)
             fk_elbow = np.asarray(fk_elbow).reshape((3, 1))
@@ -66,7 +71,7 @@ class ArmPredictor():
         prediction = np.reshape(prediction, (self.pred_step, 3))
         return prediction
 
-    def IK(self, wrist_target, elbow_target, H, step=0.3, epsilon=0.0005):
+    def IK(self, wrist_target, elbow_target, H, step=0.3, epsilon=0.0001):
         """
         This function calculates the joint space configuration of arm with the given joint positions
         Parameters: 
@@ -76,28 +81,29 @@ class ArmPredictor():
         Returns: 
             cur_th (5x1 matrix): The joint space configuration of the arm with the given cartesian position.
         """
-        # Transform positions to shoulder frame
-        elbow_tar = self.trans_to_frame(elbow_target[0:3], H)
-        wrist_tar = self.trans_to_frame(wrist_target[0:3], H)
-        target_pos = np.asarray([elbow_tar[0], elbow_tar[1], elbow_tar[2], wrist_tar[0], wrist_tar[1], wrist_tar[2]])
-        target_pos = np.reshape(target_pos, (6, 1))
-        ep = target_pos.copy()
-        cur_th = np.matrix([[0], [0], [0], [0], [0]])
+        # Transform positions from camera frame to shoulder frame
+        elbow_target = self.trans_to_frame(elbow_target[:3], H)
+        wrist_target = self.trans_to_frame(wrist_target[:3], H)
+        target_pos = np.asarray([elbow_target[:3], wrist_target[:3]]).reshape((6, 1))
+        err_pos = target_pos.copy()
+        cur_th = np.zeros((5, 1))
         count = 0
-        while((abs(ep[0])>epsilon or abs(ep[1])>epsilon or abs(ep[2])>epsilon or 
-               abs(ep[3])>epsilon or abs(ep[4])>epsilon or abs(ep[5])>epsilon) and count<1000):
+        while(not self.reach_target(err_pos, epsilon) and count<1000):
             J = self.matlab_eng.jacobian_ew(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
                                             self.l1_len, self.l2_len, float(np.pi), nargout=1)
             J_inv = self.matlab_eng.J_inv(J)
-            d_th = np.matmul(J_inv, ep)
+            d_th = np.matmul(J_inv, err_pos)
             cur_th = cur_th + step*d_th
 
             pos = self.matlab_eng.FK_ew(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
                                         self.l1_len, self.l2_len, float(np.pi), nargout=1)
             cur_pos = np.asarray(pos).reshape((6, 1))
-            ep = target_pos-cur_pos
+            err_pos = target_pos - cur_pos
             count+=1
         return cur_th
+    
+    def reach_target(self, error, eps):
+        return (error[0]<eps and error[1]<eps and error[2]<eps and error[3]<eps and error[4]<eps and error[5]<eps)
 
     def set_arm_len(self, p1, p2, p3):
         """

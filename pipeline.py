@@ -5,28 +5,33 @@ from predict_wrist import WristPredictor
 import utils as util
 
 param_path = 'params.yaml'
-test_data = [0, 0, 1] # [human_id, task_id, trial]
+test_data = [0, 1, 0] # [human_id, task_id, trial]
 
+# Load data
 test_data = util.load_data(test_data) # data: [lw, rw, le, re, ls, rs] nx18
-scaler = util.create_scaler(-5, 5)
+scaler = util.create_scaler(-1, 1)
 scale_data = util.load_scale_data()
 scaler = util.fit_data(scaler, scale_data)
-
 wrist_data = test_data[:, 0:3]
 elbow_data = test_data[:, 6:9]
 shoulder_data = test_data[:, 12:15]
 wrist_data_normalized = util.scale_data([wrist_data], scaler)[0]
 saveData = []
 
+# Create wrist and arm prediction modules
 wristPredictor = WristPredictor(param_path)
 armPredictor = ArmPredictor(param_path)
-
-# Set arm length
 armPredictor.set_arm_len(shoulder_data[0, :3], elbow_data[0, :3], wrist_data[0, :3])
+shoulder_start = shoulder_data[0, :]
+H = np.matrix([[1, 0, 0, shoulder_start[0]],
+               [0, 1, 0, shoulder_start[1]],
+               [0, 0, 1, shoulder_start[2]],
+               [0, 0, 0, 1]]) # Transformation from camera frame to shoulder frame
 
 test_inputs = wrist_data_normalized[:wristPredictor.sequence_length, :].tolist()
-horizon = len(wrist_data) - wristPredictor.pred_step
+horizon = 900#len(wrist_data) - wristPredictor.pred_step
 test_output = []
+
 print("Time horizon: ", horizon)
 for i in range(horizon):
     t1 = time.time()
@@ -36,15 +41,9 @@ for i in range(horizon):
     else:
         wrist_prediction = wristPredictor.predict(test_inputs, wrist_prediction[0], 1)
 
-    shoulder_start = shoulder_data[i, :]
-    H = np.matrix([[1, 0, 0, shoulder_start[0]],
-                   [0, 1, 0, shoulder_start[1]],
-                   [0, 0, 1, shoulder_start[2]],
-                   [0, 0, 0, 1]]) # Transformation from camera frame to shoulder frame
-
+    # Obtain current configuration
     cur_th = armPredictor.IK(np.reshape(wrist_data[i, :3], (3, 1)), np.reshape(elbow_data[i, :3], (3, 1)), H)
     wrist_pred = util.inverse_scale_data(wrist_prediction, scaler) # Un-normalize wrist prediction
-    #wrist_pred = wrist_data[i+1:i+1+prediction_step, :]
     if(i==0):
         elbow_prediction = armPredictor.predict_arm(np.asarray(wrist_pred), cur_th, H, 0) # First time. No adaptation
     else:

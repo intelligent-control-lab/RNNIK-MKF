@@ -22,16 +22,12 @@ class RNN(nn.Module):
         self.x_pre = 0
  
     def forward(self, input_seq):
-        self.hidden_cell = (torch.zeros(self.num_layers, 1, self.hidden_size).to(self.device),
-                            torch.zeros(self.num_layers, 1, self.hidden_size).to(self.device))
-        
-        lstm_out, _ = self.lstm(input_seq, self.hidden_cell)
-        xt = lstm_out[:, -1, :].view(self.hidden_size, 1).cpu()
-
+        lstm_out, _ = self.lstm(input_seq)#, self.hidden_cell)
         # Take the output from last RNN layer
+        xt = lstm_out[:, -1, :].view(self.hidden_size, 1).cpu()
         self.x_pre = xt
         
         # Take the last output
-        predictions = self.linear(lstm_out).view(self.sequence_length, self.output_step*self.output_dim)[-1]
+        predictions = self.linear(lstm_out[:, -1, :])
         predictions = predictions.view(self.output_step, self.output_dim)
         return predictions

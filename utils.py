@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 
 def create_inout_sequences(input_data, seq_len, input_size, output_step):
+    """
+    Creates input sequence for training. [(sequence, label)]
+    """
     inout_seq = []
     for data in input_data:
         data_seq = []
@@ -17,10 +20,10 @@ def create_inout_sequences(input_data, seq_len, input_size, output_step):
 
 def load_scale_data():
     """
-    Load and combine all data set
+    Load and combine all data sets.
     """
     data_all = np.zeros((1, 3))
-    num_human = 2
+    num_human = 1
     num_task = 5
     num_trials = 2
     for human_id in range(num_human):
@@ -92,8 +95,8 @@ def calculate_rmse(test_data, actual_predictions):
             except Exception as e:
                 continue
             #print(pred, ground_truth)
-            error_l = L2_norm(pred_l, ground_truth_l)
-            error_r = L2_norm(pred_r, ground_truth_r)
+            error_l = rmse(pred_l, ground_truth_l)
+            error_r = rmse(pred_r, ground_truth_r)
             #print(error)
             error_sum_l += error_l
             error_sum_r += error_r
@@ -101,21 +104,16 @@ def calculate_rmse(test_data, actual_predictions):
 
     return error_sum_l/count, error_sum_r/count
 
-def L2_norm(a, b):
-    n = 0
-    for i in range(len(a)):
-        n += np.square(a[i]-b[i])
-    norm = np.sqrt(n)
-    return norm
+def rmse(a, b):
+    err = np.sqrt(((a - b) ** 2).mean())
+    return err
 
 def visualize_wrist_predictions(test_data, actual_predictions, predict_step, input_step):
     # Visualize Results
-    fig, axs = plt.subplots(3) # visualize lx, rx, ly, ry, lz, rz
-    fig.suptitle('Prediction Step: '+str(predict_step))
-    test_data_size = len(test_data)
+    fig, axs = plt.subplots(3) # visualize w_x, w_y, w_z
+    fig.suptitle('Wrist Prediction Step: '+str(predict_step))
 
-    # Plot X
-    axs[0].set(ylabel='Left X Position')
+    axs[0].set(ylabel='Wrist X')
     axs[0].grid(True)
     axs[0].autoscale(axis='x', tight=True)
     axs[0].plot(test_data[:, 0], label='Test Data')
@@ -130,7 +128,7 @@ def visualize_wrist_predictions(test_data, actual_predictions, predict_step, inp
                 axs[0].plot(x, actual_predictions[i, :, 0])
     axs[0].legend(loc="upper right", shadow=True, fancybox=True)
 
-    axs[1].set(ylabel='Left Y Position')
+    axs[1].set(ylabel='Wrist Y')
     axs[1].grid(True)
     axs[1].autoscale(axis='x', tight=True)
     axs[1].plot(test_data[:, 1])
@@ -141,7 +139,7 @@ def visualize_wrist_predictions(test_data, actual_predictions, predict_step, inp
             x = np.arange(i+1, i+1+predict_step, 1)
             axs[1].plot(x, actual_predictions[i, :, 1])
 
-    axs[2].set(ylabel='Left Z Position')
+    axs[2].set(ylabel='Wrist Z')
     axs[2].grid(True)
     axs[2].autoscale(axis='x', tight=True)
     axs[2].plot(test_data[:, 2])
@@ -154,12 +152,10 @@ def visualize_wrist_predictions(test_data, actual_predictions, predict_step, inp
 
 def visualize_arm_predictions(test_data, actual_predictions, predict_step, input_step):
     # Visualize Results
-    fig, axs = plt.subplots(6) # visualize lx, rx, ly, ry, lz, rz
-    fig.suptitle('Prediction Step: '+str(predict_step))
-    test_data_size = len(test_data)
+    fig, axs = plt.subplots(6) # visualize wx, wy, wz, ex, ey, ez
+    fig.suptitle('Full Arm Prediction Step: '+str(predict_step))
 
-    # Plot X
-    axs[0].set(ylabel=' W Left X Position')
+    axs[0].set(ylabel=' Wrist X')
     axs[0].grid(True)
     axs[0].autoscale(axis='x', tight=True)
     axs[0].plot(test_data[:, 0], label='Test Data')
@@ -174,7 +170,7 @@ def visualize_arm_predictions(test_data, actual_predictions, predict_step, input
                 axs[0].plot(x, actual_predictions[i, :, 0])
     axs[0].legend(loc="upper right", shadow=True, fancybox=True)
 
-    axs[1].set(ylabel='W Left Y Position')
+    axs[1].set(ylabel='Wrist Y')
     axs[1].grid(True)
     axs[1].autoscale(axis='x', tight=True)
     axs[1].plot(test_data[:, 1])
@@ -185,7 +181,7 @@ def visualize_arm_predictions(test_data, actual_predictions, predict_step, input
             x = np.arange(i+1, i+1+predict_step, 1)
             axs[1].plot(x, actual_predictions[i, :, 1])
 
-    axs[2].set(ylabel='W Left Z Position')
+    axs[2].set(ylabel='Wrist Z')
     axs[2].grid(True)
     axs[2].autoscale(axis='x', tight=True)
     axs[2].plot(test_data[:, 2])
@@ -196,7 +192,7 @@ def visualize_arm_predictions(test_data, actual_predictions, predict_step, input
             x = np.arange(i+1, i+1+predict_step, 1)
             axs[2].plot(x, actual_predictions[i, :, 2])
 
-    axs[3].set(ylabel='E Left X Position')
+    axs[3].set(ylabel='Elbow X')
     axs[3].grid(True)
     axs[3].autoscale(axis='x', tight=True)
     axs[3].plot(test_data[:, 6])
@@ -207,8 +203,7 @@ def visualize_arm_predictions(test_data, actual_predictions, predict_step, input
             x = np.arange(i+1, i+1+predict_step, 1)
             axs[3].plot(x, actual_predictions[i, :, 3])
 
-    # Plot Z
-    axs[4].set(ylabel='E Left Y Position')
+    axs[4].set(ylabel='Elbow Y')
     axs[4].grid(True)
     axs[4].autoscale(axis='x', tight=True)
     axs[4].plot(test_data[:, 7])
@@ -219,7 +214,7 @@ def visualize_arm_predictions(test_data, actual_predictions, predict_step, input
             x = np.arange(i+1, i+1+predict_step, 1)
             axs[4].plot(x, actual_predictions[i, :, 4])
 
-    axs[5].set(xlabel='Time', ylabel='E Left Z Position')
+    axs[5].set(xlabel='Time', ylabel='Elbow Z')
     axs[5].grid(True)
     axs[5].autoscale(axis='x', tight=True)
     axs[5].plot(test_data[:, 8])
