@@ -50,9 +50,6 @@ class ArmPredictor():
             self.err_th_list.append(err.reshape((1, 5)))
             self.K = self.MKF.adapt(xk, err)
             self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
-            # self.pre_cur_pos = cur_pos
-            # self.pre_cur_th = cur_th
-            # self.pre_J = J
         if(adapt and self.enable_adapt):
             self.pre_cur_pos = cur_pos
             self.pre_cur_th = cur_th
