@@ -1,6 +1,6 @@
 import numpy as np
 import matlab.engine
-from RLS import RLS
+from MKF import MKF
 import yaml
 
 class ArmPredictor():
@@ -17,59 +17,61 @@ class ArmPredictor():
         lamda = data['arm_predictor']['lambda']
         self.enable_adapt = data['arm_predictor']['adapt']
         self.pred_step = data['prediction_step']
-        self.RLS = RLS(self.K, 100000*np.identity(5), lamda)
+        EMA_v = data['arm_predictor']['EMA_v']
+        EMA_p = data['arm_predictor']['EMA_p']
+        self.MKF = MKF(self.K, np.identity(5), lamda, EMA_v, EMA_p, sig_r=0.005, sig_q=0.005)
         
         self.K_list = []
         self.pre_cur_pos = 0
         self.pre_cur_th = 0
         self.pre_J = 0
+        self.err_th_list = []
     
     def predict_arm(self, wrist_prediction, cur_th, shoulder_trans, adapt):
         cur_th = np.reshape(cur_th, (5, 1)) # 5 DOF arm
         prediction = []
 
-        # Iteratively take in wrist prediction and output corresponding elbow prediction
-        for i in range(self.pred_step):
-            # Transform position from camera frame to shoulder frame
-            next_pos_world = wrist_prediction[i, :3]
-            next_pos = self.trans_to_frame(next_pos_world, shoulder_trans)
+        # Transform position from camera frame to shoulder frame
+        next_pos_world = wrist_prediction[:3]
+        next_pos = self.trans_to_frame(next_pos_world, shoulder_trans)
 
-            # Calculate Jacobian and position at current step
-            J = self.matlab_eng.jacobian(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
-                                         self.l1_len, self.l2_len, float(np.pi), nargout=1)
-            fk = self.matlab_eng.FK(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
-                                    self.l1_len, self.l2_len, float(np.pi), nargout=1)
-            cur_pos = np.asarray(fk).reshape((3, 1))
-            
-            # Adaptation
-            if(i==0 and self.enable_adapt):
-                if(adapt):
-                    dw = cur_pos-self.pre_cur_pos
-                    xk = np.matmul(np.transpose(self.pre_J), dw)
-                    pred_cur_th = self.pre_cur_th+np.matmul(np.transpose(self.K), xk)
-                    err = cur_th-pred_cur_th
+        # Calculate Jacobian and position at current step
+        J = self.matlab_eng.jacobian(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
+                                     self.l1_len, self.l2_len, float(np.pi), nargout=1)
+        fk = self.matlab_eng.FK(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
+                                self.l1_len, self.l2_len, float(np.pi), nargout=1)
+        cur_pos = np.asarray(fk).reshape((3, 1))
 
-                    self.K = self.RLS.adapt(xk, err)
-                    self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
-                else:
-                    self.pre_cur_pos = cur_pos
-                    self.pre_cur_th = cur_th
-                    self.pre_J = J
+        if(adapt and self.enable_adapt and not isinstance(self.pre_J, int)):
+            dw = cur_pos-self.pre_cur_pos
+            xk = np.matmul(np.transpose(self.pre_J), dw)
+            pred_cur_th = self.pre_cur_th+np.matmul(np.transpose(self.K), xk)
+            err = cur_th-pred_cur_th
+            self.err_th_list.append(err.reshape((1, 5)))
+            self.K = self.MKF.adapt(xk, err)
+            self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
+            # self.pre_cur_pos = cur_pos
+            # self.pre_cur_th = cur_th
+            # self.pre_J = J
+        if(adapt and self.enable_adapt):
+            self.pre_cur_pos = cur_pos
+            self.pre_cur_th = cur_th
+            self.pre_J = J
             
-            dw = next_pos[:3, :]-cur_pos[:3, :]
-            next_th = cur_th + np.matmul(np.matmul(np.transpose(self.K), np.transpose(J)), dw)
-            cur_th = next_th
+        dw = next_pos[:3, :]-cur_pos[:3, :]
+        next_th = cur_th + np.matmul(np.matmul(np.transpose(self.K), np.transpose(J)), dw)
+        cur_th = next_th
             
-            # Transform prediction in joint space to Cartesian
-            fk_elbow = self.matlab_eng.FK_elbow(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
-                                                self.l1_len, self.l2_len, float(np.pi), nargout=1)
-            fk_elbow = np.asarray(fk_elbow).reshape((3, 1))
-            fk_elbow = np.append(fk_elbow, np.array([[1]]), axis=0)
-            pos_elbow = np.matmul(shoulder_trans, fk_elbow)
-            prediction.append(np.reshape(pos_elbow[:3, :], (1, 3)))
+        # Transform prediction in joint space to Cartesian
+        fk_elbow = self.matlab_eng.FK_elbow(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
+                                            self.l1_len, self.l2_len, float(np.pi), nargout=1)
+        fk_elbow = np.asarray(fk_elbow).reshape((3, 1))
+        fk_elbow = np.append(fk_elbow, np.array([[1]]), axis=0)
+        pos_elbow = np.matmul(shoulder_trans, fk_elbow)
+        prediction.append(np.reshape(pos_elbow[:3, :], (1, 3)))
         prediction = np.asarray(prediction)
-        prediction = np.reshape(prediction, (self.pred_step, 3))
-        return prediction
+        prediction = np.reshape(prediction, (1, 3))
+        return prediction, next_th
 
     def IK(self, wrist_target, elbow_target, H, step=0.3, epsilon=0.0001):
         """
@@ -88,7 +90,7 @@ class ArmPredictor():
         err_pos = target_pos.copy()
         cur_th = np.zeros((5, 1))
         count = 0
-        while(not self.reach_target(err_pos, epsilon) and count<1000):
+        while(not self.reach_target(err_pos, epsilon) and count<500):
             J = self.matlab_eng.jacobian_ew(float(cur_th[0]), float(cur_th[1]), float(cur_th[2]), float(cur_th[3]), float(cur_th[4]), 
                                             self.l1_len, self.l2_len, float(np.pi), nargout=1)
             J_inv = self.matlab_eng.J_inv(J)

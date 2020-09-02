@@ -78,36 +78,6 @@ def inverse_scale_data(data, scaler):
     data_inverse = scaler.inverse_transform(np.array(data).reshape(-1, 3))
     return data_inverse
 
-def calculate_rmse(test_data, actual_predictions):
-    count = 0
-    error_sum_l = 0
-    error_sum_r = 0
-    data_len = len(test_data)
-    pred_step = actual_predictions.shape[1]
-
-    for i in range(data_len):
-        for j in range(pred_step):
-            pred_l = actual_predictions[i, j, :3]
-            pred_r = actual_predictions[i, j, 3:]
-            try:
-                ground_truth_l = test_data[i+j+1, :3]
-                ground_truth_r = test_data[i+j+1, 3:]
-            except Exception as e:
-                continue
-            #print(pred, ground_truth)
-            error_l = rmse(pred_l, ground_truth_l)
-            error_r = rmse(pred_r, ground_truth_r)
-            #print(error)
-            error_sum_l += error_l
-            error_sum_r += error_r
-            count += 1
-
-    return error_sum_l/count, error_sum_r/count
-
-def rmse(a, b):
-    err = np.sqrt(((a - b) ** 2).mean())
-    return err
-
 def visualize_wrist_predictions(test_data, actual_predictions, predict_step, input_step):
     # Visualize Results
     fig, axs = plt.subplots(3) # visualize w_x, w_y, w_z

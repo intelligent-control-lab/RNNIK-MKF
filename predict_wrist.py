@@ -3,6 +3,7 @@ import yaml
 import utils as util
 import RNN_LSTM as LSTM
 import numpy as np
+import copy
 import time
 from MKF import MKF
 
@@ -33,7 +34,7 @@ class WristPredictor():
         lamda = data['wrist_predictor']['lambda'] # Forgetting factor
         EMA_v = data['wrist_predictor']['EMA_v']
         EMA_p = data['wrist_predictor']['EMA_p']
-        self.MKF = MKF(self.K, np.identity(1), lamda, EMA_v, EMA_p)
+        self.MKF = MKF(self.K, np.identity(self.hidden_size), lamda, EMA_v, EMA_p)
         self.K_list = [] 
         self.jt_list = []
 
@@ -49,38 +50,40 @@ class WristPredictor():
         """
         inputs = input_seq[:][:]
         cur_predict = []
-        for i in range(self.pred_step):
-            seq = torch.FloatTensor(inputs[-self.sequence_length:]).view(1, self.sequence_length, self.input_size).to(self.device)
-            if(i == 0 and adapt):
-                jt = np.linalg.norm(np.asarray(input_seq[-1][:]).reshape(3, 1) - np.asarray(pred_y).reshape(3, 1))
-                self.jt_list.append(jt)
-                if(self.enable_adapt):
-                    kt = 1
-                    if(self.enable_multiepoch):
-                        if(jt > self.ep1 and jt <= self.ep2):
-                            kt = 2
-                        elif(jt > self.ep2):
-                            kt = 0
-                    for idx in range(kt):
-                        err = (np.asarray(input_seq[-1][:]).reshape((3, 1)) - np.asarray(pred_y).reshape((3, 1)))
-                        self.K = self.MKF.adapt(self.pre_x, err)
-                        pred_y = np.matmul(np.transpose(self.K), self.pre_x)
-                    self.model.state_dict()['linear.weight'][:, :] = torch.FloatTensor(np.transpose(self.K[:, :])).to(self.device)
-                    self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
+        
+        seq = torch.FloatTensor(inputs[-self.sequence_length:]).view(1, self.sequence_length, self.input_size).to(self.device)
+        if(adapt):
+            jt = np.linalg.norm(np.asarray(input_seq[-1][:]).reshape(3, 1) - np.asarray(pred_y).reshape(3, 1))
+            err = (np.asarray(input_seq[-1][:]).reshape((3, 1)) - np.asarray(pred_y).reshape((3, 1)))
+            self.jt_list.append(err.reshape((1, 3)))
+            if(self.enable_adapt):
+                kt = 1
+                if(self.enable_multiepoch):
+                    if(jt > self.ep1 and jt <= self.ep2):
+                        kt = 2
+                    elif(jt > self.ep2):
+                        kt = 0
+                for idx in range(kt):
+                    err = (np.asarray(input_seq[-1][:]).reshape((3, 1)) - np.asarray(pred_y).reshape((3, 1)))
+                    if(isinstance(self.pre_x, int)):
+                        break
+                    self.K = self.MKF.adapt(self.pre_x, err)
+                    pred_y = np.matmul(np.transpose(self.K), self.pre_x)
+                self.model.state_dict()['linear.weight'][:, :] = torch.FloatTensor(np.transpose(self.K[:, :])).to(self.device)
+                self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
                     
-            with torch.no_grad():
-                predict = self.model(seq)
-                step_predict = []
-                for j in range(self.output_size):
-                    step_predict.append(predict[0, j].item())
-                cur_predict.append(step_predict)
-                if(i == 0):
-                    self.pre_x = np.asarray(self.model.x_pre)
-            inputs.append(step_predict)
+        with torch.no_grad():
+            predict = self.model(seq)
+            step_predict = []
+            for j in range(self.output_size):
+                step_predict.append(predict[0, j].item())
+            cur_predict.append(step_predict)
+            if(adapt):
+                self.pre_x = np.asarray(self.model.x_pre)
         return cur_predict
 
 if __name__ == "__main__":
-    test_data_set = [0, 3, 1]
+    test_data_set = [0, 0, 0]
     test_data = util.load_data(test_data_set)[:, :3]
     scaler = util.create_scaler(-1, 1)
     scale_data = util.load_scale_data()
@@ -94,18 +97,22 @@ if __name__ == "__main__":
     test_output = []
     for i in range(horizon):
         test_inputs.append(test_data_normalized[i, :].tolist())
-        if(i == 0):
-            wrist_prediction = wristPredictor.predict(test_inputs, 0, 0)
-        else:
-            wrist_prediction = wristPredictor.predict(test_inputs, wrist_prediction[0], 1)
-        test_output.append(wrist_prediction)      
+        inputs = copy.deepcopy(test_inputs)
+        for j in range(wristPredictor.pred_step):
+            if(i != 0 and j==0):
+                wrist_prediction = wristPredictor.predict(inputs, pre_wrist_pred, 1)
+            else:
+                wrist_prediction = wristPredictor.predict(inputs, 0, 0)
+            if(j == 0):
+                pre_wrist_pred = wrist_prediction[0]
+            inputs.append(wrist_prediction[0])
+            test_output.append(wrist_prediction[0])      
     actual_predictions = util.inverse_scale_data(test_output, scaler)
     actual_predictions = np.asarray(actual_predictions).reshape(horizon, wristPredictor.pred_step, wristPredictor.output_size)
 
     # Visualize Results
     util.visualize_wrist_predictions(test_data, actual_predictions, wristPredictor.pred_step, wristPredictor.sequence_length)
     if(wristPredictor.enable_adapt):
-        np.savetxt('k_list_wrist.txt', np.reshape(wristPredictor.K_list, (horizon-1, 128*3)))
-    np.savetxt('jt_list.txt', np.reshape(wristPredictor.jt_list, (horizon-1, 1)))
+        np.savetxt('k_list_wrist.txt', np.reshape(wristPredictor.K_list, (len(wristPredictor.K_list), 128*3)))
     np.savetxt('prediction.txt', np.reshape(actual_predictions, (horizon*wristPredictor.pred_step, 3)))
     util.show_visualizations()

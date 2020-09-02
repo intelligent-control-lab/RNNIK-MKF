@@ -50,9 +50,9 @@ if(train):
     model.train()
     min_loss = 1000
     time_start = time.time()
-
     for i in range(num_epochs):
         ti = time.time()
+        maxloss = 0
         for inout_seq in train_inout_seq:
             for idx in range(len(inout_seq)):
                 seq, labels = inout_seq[idx]
@@ -68,15 +68,17 @@ if(train):
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
+                    if(loss.item() > maxloss):
+                        maxloss = loss.item()
+
                     seq = np.asarray(seq[1:])
                     seq = np.append(seq, y, axis=0)
                     try:
                         _, labels = inout_seq[idx+j+1]
                     except Exception as e:
                         continue
-                    
-        print("epocho "+str(i)+f' {time.time()-ti:1.3f}s', f'loss: {loss.item():10.10f}')
-        cur_loss = loss.item()
+        cur_loss = maxloss         
+        print("epocho "+str(i)+f' {time.time()-ti:1.3f}s', f'loss: {cur_loss:10.10f}')
         # Save model when have a minimum loss or every 20 epochs
         if((cur_loss < min_loss or i%20==0) and save_model):
             torch.save({'epoch': i,
@@ -84,8 +86,8 @@ if(train):
                         'optimizer_state_dict': optimizer.state_dict(),
                         'loss': loss,
                         }, output_folder+'model'+str(i)+'.tar')
-            if(cur_loss < min_loss):
-                min_loss = cur_loss
+        if(cur_loss < min_loss):
+            min_loss = cur_loss
     print(f'epoch: {i:1} loss: {loss.item():10.10f}')
     if(save_model):
         torch.save({'epoch': i,
