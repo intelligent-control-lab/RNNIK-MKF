@@ -60,6 +60,16 @@ def load_data(data_fname):
     data = np.loadtxt('data/subject'+str(human_id)+'_'+str(task_id)+'_'+str(trial)+'_instruct/data_avg.txt')
     return data
 
+def load_joint_data(data_fname):
+    """
+    Load a single data file
+    """
+    human_id = data_fname[0]
+    task_id = data_fname[1]
+    trial = data_fname[2]
+    data = np.loadtxt('data/subject'+str(human_id)+'_'+str(task_id)+'_'+str(trial)+'_instruct/data_joint.txt')
+    return data
+
 def create_scaler(min_, max_):
     return MinMaxScaler(feature_range=(min_, max_))
 

@@ -32,6 +32,7 @@ H = np.matrix([[1, 0, 0, shoulder_start[0]],
 test_inputs = wrist_data_normalized[:wristPredictor.sequence_length, :].tolist()
 horizon = len(wrist_data) - wristPredictor.pred_step
 test_output = []
+pre_wrist_pred = 0
 
 print("Time horizon: ", horizon)
 for i in range(horizon):
@@ -40,15 +41,13 @@ for i in range(horizon):
     inputs = copy.deepcopy(test_inputs)
     cur_th = armPredictor.IK(np.reshape(wrist_data[i, :3], (3, 1)), np.reshape(elbow_data[i, :3], (3, 1)), H)
     for j in range(wristPredictor.pred_step):
-        if(j == 0 and i != 0):
-            # update
-            wrist_prediction = wristPredictor.predict(inputs, pre_wrist_pred, 1)
-            wrist_pred = util.inverse_scale_data(wrist_prediction, scaler) # Un-normalize wrist prediction
-            elbow_prediction, cur_th = armPredictor.predict_arm(np.asarray(wrist_pred[0]), cur_th, H, 1) # First time. No adaptation
+        if(j == 0):
+            adapt = 1
         else:
-            wrist_prediction = wristPredictor.predict(inputs, 0, 0) 
-            wrist_pred = util.inverse_scale_data(wrist_prediction, scaler)
-            elbow_prediction, cur_th = armPredictor.predict_arm(np.asarray(wrist_pred[0]), cur_th, H, 0)
+            adapt = 0
+        wrist_prediction = wristPredictor.predict(inputs, pre_wrist_pred, adapt) 
+        wrist_pred = util.inverse_scale_data(wrist_prediction, scaler)
+        elbow_prediction, cur_th = armPredictor.predict_arm(np.asarray(wrist_pred[0]), cur_th, H, adapt)
         if(j == 0):
             pre_wrist_pred = wrist_prediction[0]
         inputs.append(wrist_prediction[0])
@@ -66,7 +65,7 @@ if(wristPredictor.enable_adapt):
 if(armPredictor.enable_adapt):
     np.savetxt('k_list_elbow.txt', np.reshape(armPredictor.K_list, (len(armPredictor.K_list), 25)))
 np.savetxt('prediction.txt', np.reshape(actual_predictions, (horizon*wristPredictor.pred_step, 9)))
-np.savetxt('wrist_adapt_err.txt', np.reshape(np.asarray(wristPredictor.jt_list), (len(wristPredictor.jt_list), 3)))
+np.savetxt('wrist_adapt_err.txt', np.reshape(np.asarray(wristPredictor.err_list), (len(wristPredictor.err_list), wristPredictor.output_size)))
 np.savetxt('elbow_adapt_err.txt', np.reshape(np.asarray(armPredictor.err_th_list), (len(armPredictor.err_th_list), 5)))
 armPredictor.shutdown_matlab()
 util.show_visualizations()

@@ -19,7 +19,7 @@ class ArmPredictor():
         self.pred_step = data['prediction_step']
         EMA_v = data['arm_predictor']['EMA_v']
         EMA_p = data['arm_predictor']['EMA_p']
-        self.MKF = MKF(self.K, np.identity(5), lamda, EMA_v, EMA_p, sig_r=0.005, sig_q=0.005)
+        self.MKF = MKF(self.K, 10000*np.identity(5), lamda, EMA_v, EMA_p, sig_r=0.005, sig_q=0.005)
         
         self.K_list = []
         self.pre_cur_pos = 0
@@ -42,15 +42,16 @@ class ArmPredictor():
                                 self.l1_len, self.l2_len, float(np.pi), nargout=1)
         cur_pos = np.asarray(fk).reshape((3, 1))
 
-        if(adapt and self.enable_adapt and not isinstance(self.pre_J, int)):
+        if(adapt and not isinstance(self.pre_J, int)):
             dw = cur_pos-self.pre_cur_pos
             xk = np.matmul(np.transpose(self.pre_J), dw)
             pred_cur_th = self.pre_cur_th+np.matmul(np.transpose(self.K), xk)
             err = cur_th-pred_cur_th
             self.err_th_list.append(err.reshape((1, 5)))
-            self.K = self.MKF.adapt(xk, err)
-            self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
-        if(adapt and self.enable_adapt):
+            if(self.enable_adapt):
+                self.K = self.MKF.adapt(xk, err)
+                self.K_list.append(np.reshape(self.K, (1, self.K.shape[0]*self.K.shape[1])))
+        if(adapt):
             self.pre_cur_pos = cur_pos
             self.pre_cur_th = cur_th
             self.pre_J = J
@@ -128,3 +129,43 @@ class ArmPredictor():
 
     def shutdown_matlab(self):
         self.matlab_eng.quit()
+
+if __name__ == "__main__":
+    import utils as util
+    import time
+    test_data_set = [0, 0, 0]
+    test_data_joint = util.load_joint_data(test_data_set)
+    test_data = util.load_data(test_data_set)
+    armPredictor = ArmPredictor('params.yaml')
+    wrist_data = test_data[:, 0:3]
+    elbow_data = test_data[:, 6:9]
+    shoulder_data = test_data[:, 12:15]
+    armPredictor.set_arm_len(shoulder_data[0, :3], elbow_data[0, :3], wrist_data[0, :3])
+    shoulder_start = shoulder_data[0, :]
+    H = np.matrix([[1, 0, 0, shoulder_start[0]],
+                   [0, 1, 0, shoulder_start[1]],
+                   [0, 0, 1, shoulder_start[2]],
+                   [0, 0, 0, 1]]) # Transformation from camera frame to shoulder frame
+    test_data = test_data[:, :3]
+
+    horizon = len(test_data) - armPredictor.pred_step
+    test_output = []
+    for i in range(horizon):
+        t1 = time.time()
+        wrist_pred = test_data[i+1:i+1+armPredictor.pred_step]
+        cur_th = test_data_joint[i, :]
+        for j in range(armPredictor.pred_step):
+            if(j == 0):
+                elbow_prediction, cur_th = armPredictor.predict_arm(np.asarray(wrist_pred[j, :]), cur_th, H, 1) # adapt
+            else:
+                elbow_prediction, cur_th = armPredictor.predict_arm(np.asarray(wrist_pred[j, :]), cur_th, H, 0)
+     
+            step_predict = [wrist_pred[j, 0], wrist_pred[j, 1], wrist_pred[j, 2], 
+                            elbow_prediction[0, 0], elbow_prediction[0, 1], elbow_prediction[0, 2],
+                            shoulder_start[0], shoulder_start[1], shoulder_start[2]]
+            test_output.append(step_predict)
+        print(i, time.time()-t1) 
+    if(armPredictor.enable_adapt):
+        np.savetxt('k_list_elbow.txt', np.reshape(armPredictor.K_list, (len(armPredictor.K_list), 25)))
+    np.savetxt('elbow_adapt_err.txt', np.reshape(np.asarray(armPredictor.err_th_list), (len(armPredictor.err_th_list), 5)))
+    armPredictor.shutdown_matlab()
