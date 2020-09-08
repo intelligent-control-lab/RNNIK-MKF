@@ -1,4 +1,4 @@
-prediction_step: 20
+prediction_step: 30
 
 arm_predictor:
   adapt: 1

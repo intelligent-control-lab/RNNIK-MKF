@@ -8,8 +8,8 @@ import yaml
 import utils as util
 import RNN_LSTM as LSTM
 
-train_data_set = [[0, 0, 1], [0, 1, 1], [0, 2, 0]]
-test_data_set = [[0, 0, 1], [0, 1, 1], [0, 2, 1]]
+train_data_set = [[0, 0, 1], [0, 1, 1], [0, 2, 0]] # set of data used for training
+test_data_set = [[0, 0, 1], [0, 1, 1], [0, 2, 1]] # set of data used for evaluation
 
 with open('params.yaml') as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
