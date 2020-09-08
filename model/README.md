@@ -1,1 +1,1 @@
-This folder contains the RNN model for wrist prediction. 
+This folder contains the pre-trained RNN model for wrist prediction. 
