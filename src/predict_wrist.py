@@ -50,9 +50,10 @@ class WristPredictor():
         
         seq = torch.FloatTensor(inputs[-self.sequence_length:]).view(1, self.sequence_length, self.input_size).to(self.device)
         if(adapt and not isinstance(self.pre_x, int)):
-            jt = np.linalg.norm(np.asarray(input_seq[-1][:]).reshape(3, 1) - np.asarray(pred_y).reshape(3, 1))
             err = (np.asarray(input_seq[-1][:]).reshape((3, 1)) - np.asarray(pred_y).reshape((3, 1)))
             self.err_list.append(err.reshape((1, 3)))
+
+            jt = np.linalg.norm(np.asarray(input_seq[-1][:]).reshape(3, 1) - np.asarray(pred_y).reshape(3, 1))
             if(self.enable_adapt):
                 kt = 1
                 if(self.enable_multiepoch):
@@ -77,41 +78,3 @@ class WristPredictor():
             if(adapt):
                 self.pre_x = np.asarray(self.model.x_pre)
         return cur_predict
-
-if __name__ == "__main__":
-    import utils as util
-    import copy
-    test_data_set = [0, 0, 0]
-    test_data = util.load_data(test_data_set)[:, :3]
-    scaler = util.create_scaler(-1, 1)
-    scale_data = util.load_scale_data()
-    scaler = util.fit_data(scaler, scale_data)
-    test_data_normalized = util.scale_data([test_data[:, :3]], scaler)[0]
-    wristPredictor = WristPredictor('params.yaml')
-
-    # Evaluate
-    test_inputs = test_data_normalized[:wristPredictor.sequence_length, :].tolist()
-    horizon = len(test_data) - wristPredictor.pred_step
-    test_output = []
-    pre_wrist_pred = 0
-    for i in range(horizon):
-        test_inputs.append(test_data_normalized[i, :].tolist())
-        inputs = copy.deepcopy(test_inputs)
-        for j in range(wristPredictor.pred_step):
-            if(j==0):
-                wrist_prediction = wristPredictor.predict(inputs, pre_wrist_pred, 1)
-                pre_wrist_pred = wrist_prediction[0]
-            else:
-                wrist_prediction = wristPredictor.predict(inputs, 0, 0)
-            inputs.append(wrist_prediction[0])
-            test_output.append(wrist_prediction[0])      
-    actual_predictions = util.inverse_scale_data(test_output, scaler)
-    actual_predictions = np.asarray(actual_predictions).reshape(horizon, wristPredictor.pred_step, wristPredictor.output_size)
-
-    # Visualize Results
-    util.visualize_wrist_predictions(test_data, actual_predictions, wristPredictor.pred_step, wristPredictor.sequence_length)
-    if(wristPredictor.enable_adapt):
-        np.savetxt('k_list_wrist.txt', np.reshape(wristPredictor.K_list, (len(wristPredictor.K_list), wristPredictor.hidden_size*wristPredictor.output_size)))
-    np.savetxt('prediction.txt', np.reshape(actual_predictions, (horizon*wristPredictor.pred_step, wristPredictor.output_size)))
-    np.savetxt('wrist_adapt_err.txt', np.reshape(np.asarray(wristPredictor.err_list), (len(wristPredictor.err_list), wristPredictor.output_size)))
-    util.show_visualizations()

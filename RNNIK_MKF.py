@@ -1,9 +1,11 @@
+import sys
+sys.path.append('src/')
 import numpy as np
 import time
+import copy
 from predict_arm import ArmPredictor
 from predict_wrist import WristPredictor
 import utils as util
-import copy
 
 param_path = 'params.yaml'
 test_data = [0, 0, 0] # [human_id, task_id, trial]
@@ -62,10 +64,15 @@ actual_predictions = np.asarray(test_output).reshape(horizon, wristPredictor.pre
 util.visualize_arm_predictions(test_data, actual_predictions, wristPredictor.pred_step, wristPredictor.sequence_length)
 if(wristPredictor.enable_adapt):
     np.savetxt('k_list_wrist.txt', np.reshape(wristPredictor.K_list, (len(wristPredictor.K_list), wristPredictor.hidden_size*wristPredictor.output_size)))
+    np.savetxt('wrist_adapt_err.txt', np.reshape(np.asarray(wristPredictor.err_list), (len(wristPredictor.err_list), wristPredictor.output_size)))
+else:
+    np.savetxt('wrist_noadapt_err.txt', np.reshape(np.asarray(wristPredictor.err_list), (len(wristPredictor.err_list), wristPredictor.output_size)))
+
 if(armPredictor.enable_adapt):
     np.savetxt('k_list_elbow.txt', np.reshape(armPredictor.K_list, (len(armPredictor.K_list), 25)))
+    np.savetxt('elbow_adapt_err.txt', np.reshape(np.asarray(armPredictor.err_th_list), (len(armPredictor.err_th_list), 5)))
+else:
+    np.savetxt('elbow_noadapt_err.txt', np.reshape(np.asarray(armPredictor.err_th_list), (len(armPredictor.err_th_list), 5)))
 np.savetxt('prediction.txt', np.reshape(actual_predictions, (horizon*wristPredictor.pred_step, 9)))
-np.savetxt('wrist_adapt_err.txt', np.reshape(np.asarray(wristPredictor.err_list), (len(wristPredictor.err_list), wristPredictor.output_size)))
-np.savetxt('elbow_adapt_err.txt', np.reshape(np.asarray(armPredictor.err_th_list), (len(armPredictor.err_th_list), 5)))
 armPredictor.shutdown_matlab()
 util.show_visualizations()

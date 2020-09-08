@@ -1,10 +1,12 @@
+import sys
+sys.path.append('src/')
 import torch
 import torch.nn as nn
 import time
-import utils as util
 import numpy as np
-import RNN_LSTM as LSTM
 import yaml
+import utils as util
+import RNN_LSTM as LSTM
 
 train_data_set = [[0, 0, 1], [0, 1, 1], [0, 2, 0]]
 test_data_set = [[0, 0, 1], [0, 1, 1], [0, 2, 1]]
@@ -36,7 +38,6 @@ scaler = util.fit_data(scaler, scale_data)
 train_data = util.load_data_set(train_data_set)
 test_data = util.load_data_set(test_data_set)
 
-#scaler.data_min_, scaler.data_max_ = util.fit_scaler()
 train_data_normalized = util.scale_data(train_data, scaler)
 train_inout_seq = util.create_inout_sequences(train_data_normalized, sequence_length, input_size, output_step)
 test_data_normalized = util.scale_data(test_data, scaler)
@@ -80,7 +81,7 @@ if(train):
         cur_loss = maxloss         
         print("epocho "+str(i)+f' {time.time()-ti:1.3f}s', f'loss: {cur_loss:10.10f}')
         # Save model when have a minimum loss or every 20 epochs
-        if((cur_loss < min_loss or i%20==0) and save_model):
+        if((cur_loss < min_loss or i%20 == 0) and save_model):
             torch.save({'epoch': i,
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
@@ -88,7 +89,7 @@ if(train):
                         }, output_folder+'model'+str(i)+'.tar')
         if(cur_loss < min_loss):
             min_loss = cur_loss
-    print(f'epoch: {i:1} loss: {loss.item():10.10f}')
+    print(f'epoch: {i:1} loss: {cur_loss:10.10f}')
     if(save_model):
         torch.save({'epoch': i,
                     'model_state_dict': model.state_dict(),
@@ -98,13 +99,8 @@ if(train):
     print(f'Training time: {time.time()-time_start:1.3f}')
 else:
     model = LSTM.RNN(input_size, sequence_length, hidden_size, num_layers, output_step, output_size, device).to(device)
-    loss_function = nn.SmoothL1Loss(reduction='mean')
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     checkpoint = torch.load(model_fname)
     model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    epoch = checkpoint['epoch']
-    loss = checkpoint['loss']
 
 # Evaluate
 print('Start Evaluating!')

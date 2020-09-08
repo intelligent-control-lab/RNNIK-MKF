@@ -16,8 +16,8 @@ wrist_predictor:
   multi_epoch_epsilon1: 0.5
   multi_epoch_epsilon2: 1
 
-  # Network hyper params
-  model_path: 'trained_model/model725.tar' #model_10in_1layer_good/model49.tar' 
+  # RNN hyper params
+  model_path: 'model/model0.tar'
   input_seq_len: 10
   input_size: 3 # input: 10x3
   hidden_size: 128
@@ -29,7 +29,7 @@ Train_wrist_predictor:
   # True: train from scratch using the hyper params in wrist_predictor and then evaluate. False: evaluate the model specified by model_path
   train: True
   save_model: True # True: save trained model in the output_folder
-  output_folder: 'trained_model/'
-  model_path: 'trained_model/model725.tar' 
-  learning_rate: 0.0001
+  output_folder: 'model/'
+  model_path: 'model/model0.tar' 
+  learning_rate: 0.001
   num_epochs: 1000
