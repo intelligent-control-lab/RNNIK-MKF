@@ -22,7 +22,7 @@ $ python3 RNNIK_MKF.py
 ```
 
 ### MKF Performance Investigation
-To investigate the parameter changing
+To investigate the parameter adaptation
 ```bash
 $ # Turn on MKF online adaptation
 $ python3 RNNIK_MKF.py
