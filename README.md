@@ -21,6 +21,22 @@ To run RNNIK-MKF:
 $ python3 RNNIK_MKF.py
 ```
 
+### MKF Performance Investigation
+To investigate the parameter changing
+```bash
+$ # Turn on MKF online adaptation
+$ python3 RNNIK_MKF.py
+$ python3 plot_params.py
+```
+To investigate the adaptation error
+```bash
+$ # Turn on MKF online adaptation
+$ python3 RNNIK_MKF.py
+$ # Turn off MKF online adaptation
+$ python3 RNNIK_MKF.py
+$ python3 plot_params.py
+```
+
 ## Parameters
 `params.yaml` contains all the parameters used in training and testing for RNNIK-MKF.
 
