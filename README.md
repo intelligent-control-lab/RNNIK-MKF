@@ -1,5 +1,5 @@
 # RNNIK-MKF
-This is the repo for RNNIK-MKF human arm motion prediction.
+This is the repo for RNNIK-MKF human arm motion prediction. The motion data is available at [here](https://github.com/intelligent-control-lab/Human_Assembly_Data).
 
 ## Dependencies
 The repo requires matlab to be installed with python usage. Please follow the [setup guide](https://www.mathworks.com/help/matlab/matlab_external/install-the-matlab-engine-for-python.html) to setup matlab for python.
